@@ -43,6 +43,34 @@ def health_check():
     except Exception as e:
         return {"status": "unhealthy", "reason": str(e)}
 
+def resolve_playlist(yt, pl_id_or_name: Optional[str]) -> Optional[str]:
+    """Resolves a playlist ID or Name (+Name)."""
+    if not pl_id_or_name:
+        return None  # Defaults to Liked Songs
+    
+    if pl_id_or_name.startswith("+"):
+        name = pl_id_or_name[1:]
+        logger.info(f"Looking up/Creating playlist: {name}")
+        
+        # Try to find existing
+        existing_id = backend.get_playlist_id_by_name(yt, name)
+        if existing_id:
+            logger.info(f"Found existing playlist: {name} ({existing_id})")
+            return existing_id
+        
+        # Create new
+        new_id = backend._ytmusic_create_playlist(yt, name, "Created via spotify2ytmusic API", "PRIVATE")
+        logger.info(f"Created new playlist: {name} ({new_id})")
+        return new_id
+    
+    return pl_id_or_name
+
+def get_playlist_url(pl_id: Optional[str]) -> str:
+    """Generates the full URL for a playlist ID."""
+    if not pl_id:
+        return "https://music.youtube.com/playlist?list=LM"  # Liked Music
+    return f"https://music.youtube.com/playlist?list={pl_id}"
+
 def run_conversion(tracks_iter, playlist_id, dry_run, track_sleep, algo):
     """Background task to run the copier."""
     try:
@@ -62,6 +90,10 @@ async def convert_tracks(request: ConvertRequest, background_tasks: BackgroundTa
     if not os.path.exists("oauth.json"):
         raise HTTPException(status_code=503, detail="YouTube Music not authenticated. oauth.json missing.")
 
+    yt = backend.get_ytmusic()
+    target_pl_id = resolve_playlist(yt, request.playlist_id)
+    target_pl_url = get_playlist_url(target_pl_id)
+
     # Convert Pydantic models to SongInfo namedtuples
     song_infos = [backend.SongInfo(t.title, t.artist, t.album or "") for t in request.tracks]
     
@@ -69,13 +101,18 @@ async def convert_tracks(request: ConvertRequest, background_tasks: BackgroundTa
     background_tasks.add_task(
         run_conversion,
         iter(song_infos),
-        request.playlist_id,
+        target_pl_id,
         request.dry_run,
         request.track_sleep,
         request.algo
     )
     
-    return {"message": "Conversion started", "count": len(song_infos)}
+    return {
+        "message": "Conversion started", 
+        "count": len(song_infos),
+        "target_playlist_id": target_pl_id or "Liked Songs",
+        "target_playlist_url": target_pl_url
+    }
 
 @app.post("/convert-from-urls")
 async def convert_urls(request: UrlRequest, background_tasks: BackgroundTasks):
@@ -89,21 +126,22 @@ async def convert_urls(request: UrlRequest, background_tasks: BackgroundTasks):
     if not client_id or not client_secret:
         raise HTTPException(status_code=400, detail="Spotify API credentials missing from environment.")
 
+    yt = backend.get_ytmusic()
+    target_pl_id = resolve_playlist(yt, request.playlist_id)
+    target_pl_url = get_playlist_url(target_pl_id)
+
     # Create a temporary file to store URLs for the backend to read
-    # In a real API we might want to avoid disk, but here we reuse backend.iter_spotify_urls
     temp_url_file = "temp_urls.json"
     with open(temp_url_file, "w") as f:
         json.dump(request.urls, f)
 
     try:
         tracks_iter = backend.iter_spotify_urls(temp_url_file, client_id, client_secret)
-        # We need to realize the iterator or part of it to count, but that triggers API calls.
-        # So we just pass it to the background task.
         
         background_tasks.add_task(
             run_conversion,
             tracks_iter,
-            request.playlist_id,
+            target_pl_id,
             request.dry_run,
             0.1, # default sleep
             request.algo
@@ -111,4 +149,9 @@ async def convert_urls(request: UrlRequest, background_tasks: BackgroundTasks):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to initialize conversion: {str(e)}")
 
-    return {"message": "URL conversion started", "url_count": len(request.urls)}
+    return {
+        "message": "URL conversion started", 
+        "url_count": len(request.urls),
+        "target_playlist_id": target_pl_id or "Liked Songs",
+        "target_playlist_url": target_pl_url
+    }
