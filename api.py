@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Any
 import os
 import json
 import logging
@@ -26,10 +26,20 @@ class ConvertRequest(BaseModel):
     track_sleep: float = 0.1
 
 class UrlRequest(BaseModel):
-    urls: List[str]
+    urls: List[Any]  # Accepts both flat ["id"] and nested [["id"]] from n8n
     playlist_id: Optional[str] = None
     algo: int = 0
     dry_run: bool = False
+
+    def flat_urls(self) -> List[str]:
+        """Flatten nested arrays from n8n into a simple list of strings."""
+        flat = []
+        for item in self.urls:
+            if isinstance(item, list):
+                flat.extend(item)
+            else:
+                flat.append(item)
+        return flat
 
 @app.get("/health")
 def health_check():
@@ -131,9 +141,12 @@ async def convert_urls(request: UrlRequest, background_tasks: BackgroundTasks):
     target_pl_url = get_playlist_url(target_pl_id)
 
     # Create a temporary file to store URLs for the backend to read
+    flat_urls = request.flat_urls()
+    logger.info(f"Processing {len(flat_urls)} URLs after flattening.")
+
     temp_url_file = "temp_urls.json"
     with open(temp_url_file, "w") as f:
-        json.dump(request.urls, f)
+        json.dump(flat_urls, f)
 
     try:
         tracks_iter = backend.iter_spotify_urls(temp_url_file, client_id, client_secret)
@@ -151,7 +164,7 @@ async def convert_urls(request: UrlRequest, background_tasks: BackgroundTasks):
 
     return {
         "message": "URL conversion started", 
-        "url_count": len(request.urls),
+        "url_count": len(flat_urls),
         "target_playlist_id": target_pl_id or "Liked Songs",
         "target_playlist_url": target_pl_url
     }
