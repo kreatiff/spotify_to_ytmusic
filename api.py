@@ -77,7 +77,7 @@ def resolve_playlist(yt, pl_id_or_name: Optional[str]) -> Optional[str]:
         
         # Create new
         try:
-            new_id = backend._ytmusic_create_playlist(yt, name, "Created via spotify2ytmusic API", "PRIVATE")
+            new_id = backend._ytmusic_create_playlist(yt, name, "Created via spotify2ytmusic API", "UNLISTED")
             logger.info(f"Created new playlist: {name} ({new_id})")
             return new_id
         except Exception as e:
