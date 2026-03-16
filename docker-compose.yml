@@ -1,0 +1,12 @@
+services:
+  spotify2ytmusic-api:
+    build: .
+    container_name: spotify2ytmusic-api
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./oauth.json:/app/oauth.json
+    environment:
+      - SPOTIPY_CLIENT_ID=${SPOTIPY_CLIENT_ID}
+      - SPOTIPY_CLIENT_SECRET=${SPOTIPY_CLIENT_SECRET}
+    restart: unless-stopped

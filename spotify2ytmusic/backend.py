@@ -5,6 +5,9 @@ import sys
 import os
 import time
 import re
+import urllib.request
+import urllib.parse
+import codecs
 
 from ytmusicapi import YTMusic
 from typing import Optional, Union, Iterator, Dict, List
@@ -172,6 +175,73 @@ def iter_spotify_playlist(
         src_track_name = src_track["track"]["name"]
 
         yield SongInfo(src_track_name, src_track_artist, src_album_name)
+
+
+def iter_metadata_json(
+    filename: str, encoding: str = "utf-8"
+) -> Iterator[SongInfo]:
+    """
+    Yields SongInfo from a simple JSON list of objects.
+    Expected format: [{"title": "...", "artist": "...", "album": "..."}, ...]
+    """
+    with open(filename, "r", encoding=encoding) as f:
+        data = json.load(f)
+
+    if isinstance(data, dict) and "tracks" in data:
+        data = data["tracks"]
+
+    for item in data:
+        yield SongInfo(
+            item.get("title") or item.get("name"),
+            item.get("artist") or item.get("artists"),
+            item.get("album"),
+        )
+
+
+def get_spotify_token(client_id: str, client_secret: str) -> str:
+    """Get Spotify access token using Client Credentials flow."""
+    url = "https://accounts.spotify.com/api/token"
+    data = urllib.parse.urlencode(
+        {"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret}
+    ).encode()
+    req = urllib.request.Request(url, data=data, method="POST")
+    with urllib.request.urlopen(req) as res:
+        return json.load(codecs.getreader("utf-8")(res))["access_token"]
+
+
+def get_spotify_track_metadata(track_id: str, token: str) -> SongInfo:
+    """Fetch track metadata from Spotify API."""
+    url = f"https://api.spotify.com/v1/tracks/{track_id}"
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {token}")
+    with urllib.request.urlopen(req) as res:
+        data = json.load(codecs.getreader("utf-8")(res))
+        return SongInfo(data["name"], data["artists"][0]["name"], data["album"]["name"])
+
+
+def iter_spotify_urls(
+    filename: str, client_id: str, client_secret: str, encoding: str = "utf-8"
+) -> Iterator[SongInfo]:
+    """
+    Yields SongInfo by fetching metadata for a list of Spotify URLs.
+    """
+    with open(filename, "r", encoding=encoding) as f:
+        urls = json.load(f)
+
+    token = get_spotify_token(client_id, client_secret)
+
+    for url in urls:
+        # Extract track ID from URL like https://open.spotify.com/track/6rqhFgbbKMSnHvYf9q6YDB?si=...
+        match = re.search(r"track/([a-zA-Z0-9]+)", url)
+        if match:
+            track_id = match.group(1)
+        else:
+            track_id = url  # Assume it's already an ID
+
+        try:
+            yield get_spotify_track_metadata(track_id, token)
+        except Exception as e:
+            print(f"ERROR: Could not fetch metadata for {url}: {e}")
 
 
 def get_playlist_id_by_name(yt: YTMusic, title: str) -> Optional[str]:

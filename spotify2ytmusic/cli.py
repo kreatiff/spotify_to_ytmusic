@@ -209,6 +209,113 @@ def load_liked():
     )
 
 
+def load_from_json():
+    """
+    Load songs from a simple JSON metadata file.
+    """
+
+    def parse_arguments():
+        parser = ArgumentParser()
+        parser.add_argument(
+            "json_file",
+            type=str,
+            help="Path to the JSON metadata file",
+        )
+        parser.add_argument(
+            "--track-sleep",
+            type=float,
+            default=0.1,
+            help="Time to sleep between each track that is added (default: 0.1)",
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Do not add songs to destination playlist (default: False)",
+        )
+        parser.add_argument(
+            "--algo",
+            type=int,
+            default=0,
+            help="Algorithm to use for search (0 = exact, 1 = extended, 2 = approximate)",
+        )
+        return parser.parse_args()
+
+    args = parse_arguments()
+
+    backend.copier(
+        backend.iter_metadata_json(args.json_file),
+        None,
+        args.dry_run,
+        args.track_sleep,
+        args.algo,
+    )
+
+
+def load_from_urls():
+    """
+    Load songs from a JSON file of Spotify track URLs.
+    """
+
+    def parse_arguments():
+        parser = ArgumentParser()
+        parser.add_argument(
+            "json_file",
+            type=str,
+            help="Path to the JSON file containing Spotify URLs",
+        )
+        parser.add_argument(
+            "--client-id",
+            type=str,
+            help="Spotify Client ID",
+        )
+        parser.add_argument(
+            "--client-secret",
+            type=str,
+            help="Spotify Client Secret",
+        )
+        parser.add_argument(
+            "--track-sleep",
+            type=float,
+            default=0.1,
+            help="Time to sleep between each track that is added (default: 0.1)",
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Do not add songs to destination playlist (default: False)",
+        )
+        parser.add_argument(
+            "--algo",
+            type=int,
+            default=0,
+            help="Algorithm to use for search (0 = exact, 1 = extended, 2 = approximate)",
+        )
+        return parser.parse_args()
+
+    args = parse_arguments()
+
+    client_id = args.client_id
+    client_secret = args.client_secret
+
+    if not client_id or not client_secret:
+        import os
+        client_id = client_id or os.environ.get("SPOTIFY_CLIENT_ID")
+        client_secret = client_secret or os.environ.get("SPOTIFY_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        print("ERROR: Spotify Client ID and Secret are required for this command.")
+        print("       Provide them via --client-id/--client-secret or SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET env vars.")
+        sys.exit(1)
+
+    backend.copier(
+        backend.iter_spotify_urls(args.json_file, client_id, client_secret),
+        None,
+        args.dry_run,
+        args.track_sleep,
+        args.algo,
+    )
+
+
 def copy_playlist():
     """
     Copy a Spotify playlist to a YTMusic playlist
