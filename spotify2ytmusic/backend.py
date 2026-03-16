@@ -443,6 +443,7 @@ def copier(
         print(f"== Youtube Playlist: {yt_pl['title']}")
 
     tracks_added_set = set()
+    processed_tracks = []
     duplicate_count = 0
     error_count = 0
 
@@ -468,6 +469,12 @@ def copier(
         if dst_track["videoId"] in tracks_added_set:
             print("(DUPLICATE, this track has already been added)")
             duplicate_count += 1
+        else:
+            processed_tracks.append({
+                "artist": src_track.artist,
+                "trackName": src_track.title
+            })
+            
         tracks_added_set.add(dst_track["videoId"])
 
         if not dry_run:
@@ -500,7 +507,8 @@ def copier(
     return {
         "added": len(tracks_added_set),
         "duplicates": duplicate_count,
-        "errors": error_count
+        "errors": error_count,
+        "tracks": processed_tracks
     }
 
 
