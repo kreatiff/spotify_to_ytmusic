@@ -105,7 +105,7 @@ def run_conversion(tracks_iter, playlist_id, dry_run, track_sleep, algo):
         logger.error(f"Background conversion error: {e}")
 
 @app.post("/convert")
-async def convert_tracks(request: ConvertRequest, background_tasks: BackgroundTasks):
+async def convert_tracks(request: ConvertRequest):
     """Convert tracks from metadata."""
     if not os.path.exists("oauth.json"):
         raise HTTPException(status_code=503, detail="YouTube Music not authenticated. oauth.json missing.")
@@ -117,25 +117,25 @@ async def convert_tracks(request: ConvertRequest, background_tasks: BackgroundTa
     # Convert Pydantic models to SongInfo namedtuples
     song_infos = [backend.SongInfo(t.title, t.artist, t.album or "") for t in request.tracks]
     
-    # We run the copier in the background so n8n doesn't timeout
-    background_tasks.add_task(
-        run_conversion,
+    # Run synchronously as requested
+    results = backend.copier(
         iter(song_infos),
-        target_pl_id,
-        request.dry_run,
-        request.track_sleep,
-        request.algo
+        dst_pl_id=target_pl_id,
+        dry_run=request.dry_run,
+        track_sleep=request.track_sleep,
+        yt_search_algo=request.algo
     )
     
     return {
-        "message": "Conversion started", 
+        "message": "Conversion complete", 
         "count": len(song_infos),
+        "results": results,
         "target_playlist_id": target_pl_id or "Liked Songs",
         "target_playlist_url": target_pl_url
     }
 
 @app.post("/convert-from-urls")
-async def convert_urls(request: UrlRequest, background_tasks: BackgroundTasks):
+async def convert_urls(request: UrlRequest):
     """Convert tracks from Spotify URLs."""
     if not os.path.exists("oauth.json"):
         raise HTTPException(status_code=503, detail="YouTube Music not authenticated. oauth.json missing.")
@@ -161,20 +161,21 @@ async def convert_urls(request: UrlRequest, background_tasks: BackgroundTasks):
     try:
         tracks_iter = backend.iter_spotify_urls(temp_url_file, client_id, client_secret)
         
-        background_tasks.add_task(
-            run_conversion,
+        # Run synchronously as requested
+        results = backend.copier(
             tracks_iter,
-            target_pl_id,
-            request.dry_run,
-            0.1, # default sleep
-            request.algo
+            dst_pl_id=target_pl_id,
+            dry_run=request.dry_run,
+            track_sleep=0.1, # default sleep
+            yt_search_algo=request.algo
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize conversion: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
     return {
-        "message": "URL conversion started", 
+        "message": "URL conversion complete", 
         "url_count": len(flat_urls),
+        "results": results,
         "target_playlist_id": target_pl_id or "Liked Songs",
         "target_playlist_url": target_pl_url
     }

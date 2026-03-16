@@ -497,6 +497,11 @@ def copier(
     print(
         f"Added {len(tracks_added_set)} tracks, encountered {duplicate_count} duplicates, {error_count} errors"
     )
+    return {
+        "added": len(tracks_added_set),
+        "duplicates": duplicate_count,
+        "errors": error_count
+    }
 
 
 def copy_playlist(
