@@ -3,7 +3,7 @@ services:
     build: .
     container_name: spotify2ytmusic-api
     ports:
-      - "8383:8080"
+      - "8282:8080"
     volumes:
       - ./oauth.json:/app/oauth.json
     environment:
