@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the app code
 COPY spotify2ytmusic/ ./spotify2ytmusic/
-COPY api.py .
+COPY api.py test_auth.py ./
 
 # Create an empty oauth.json if it doesn't exist (to avoid mount issues, though volume mount is preferred)
 RUN touch oauth.json

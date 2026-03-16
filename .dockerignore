@@ -1,0 +1,13 @@
+venv/
+.git/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.db
+.ipynb_checkpoints/
+.vscode/
+.idea/
+raw_headers.txt
+temp_urls.json
