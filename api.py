@@ -48,9 +48,13 @@ def health_check():
         return {"status": "unhealthy", "reason": "oauth.json missing"}
     
     try:
-        backend.get_ytmusic()
-        return {"status": "healthy"}
+        yt = backend.get_ytmusic()
+        # Test basic account connectivity
+        # Note: some accounts return None for get_library_playlists if empty
+        playlists = yt.get_library_playlists(limit=1)
+        return {"status": "healthy", "auth": "verified", "playlist_test": "ok"}
     except Exception as e:
+        logger.error(f"Health check failed: {e}")
         return {"status": "unhealthy", "reason": str(e)}
 
 def resolve_playlist(yt, pl_id_or_name: Optional[str]) -> Optional[str]:
