@@ -62,16 +62,22 @@ def resolve_playlist(yt, pl_id_or_name: Optional[str]) -> Optional[str]:
         name = pl_id_or_name[1:]
         logger.info(f"Looking up/Creating playlist: {name}")
         
-        # Try to find existing
-        existing_id = backend.get_playlist_id_by_name(yt, name)
-        if existing_id:
-            logger.info(f"Found existing playlist: {name} ({existing_id})")
-            return existing_id
+        # Try to find existing playlist — skip gracefully if library access fails
+        try:
+            existing_id = backend.get_playlist_id_by_name(yt, name)
+            if existing_id:
+                logger.info(f"Found existing playlist: {name} ({existing_id})")
+                return existing_id
+        except Exception as e:
+            logger.warning(f"Could not list playlists (will create instead): {e}")
         
         # Create new
-        new_id = backend._ytmusic_create_playlist(yt, name, "Created via spotify2ytmusic API", "PRIVATE")
-        logger.info(f"Created new playlist: {name} ({new_id})")
-        return new_id
+        try:
+            new_id = backend._ytmusic_create_playlist(yt, name, "Created via spotify2ytmusic API", "PRIVATE")
+            logger.info(f"Created new playlist: {name} ({new_id})")
+            return new_id
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Could not create playlist '{name}': {e}")
     
     return pl_id_or_name
 
